@@ -1,0 +1,12 @@
+{
+	"displayTimeUnit": "ms", "traceEvents": [
+		{"name":"homework3_slow_function", "ph" : "B", "pid" : 0, "tid" : "16864", "ts" : "6000"},
+		{"name":"homework3_slow_function", "ph" : "B", "pid" : 0, "tid" : "25268", "ts" : "7000"},
+		{"name":"homework3_slower_function", "ph" : "B", "pid" : 0, "tid" : "16864", "ts" : "110000"},
+		{"name":"homework3_slower_function", "ph" : "B", "pid" : 0, "tid" : "25268", "ts" : "110000"},
+		{"name":"", "ph" : "E", "pid" : 0, "tid" : "25268", "ts" : "325000"},
+		{"name":"", "ph" : "E", "pid" : 0, "tid" : "25268", "ts" : "325000"},
+		{"name":"", "ph" : "E", "pid" : 0, "tid" : "16864", "ts" : "325000"},
+		{"name":"", "ph" : "E", "pid" : 0, "tid" : "16864", "ts" : "325000"}
+	]
+}

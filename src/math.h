@@ -6,6 +6,8 @@
 #include <math.h>
 #include <stdbool.h>
 
+#define MICRO_TO_MILLI 1000
+
 // Determines if two scalar values are nearly equal
 // given the limitations of floating point accuracy.
 __forceinline bool almost_equalf(float a, float b)

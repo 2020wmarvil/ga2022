@@ -30,3 +30,8 @@ void thread_sleep(uint32_t ms)
 {
 	Sleep(ms);
 }
+
+int get_current_thread_id()
+{
+	return GetCurrentThreadId();
+}

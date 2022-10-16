@@ -30,7 +30,7 @@ fs_work_t* fs_read(fs_t* fs, const char* path, heap_t* heap, bool null_terminate
 // Queue a file write.
 // File at the specified path will be written in full.
 // Returns a work object.
-fs_work_t* fs_write(fs_t* fs, const char* path, const void* buffer, size_t size, bool use_compression);
+fs_work_t* fs_write(fs_t* fs, const char* path, const void* buffer, size_t size, bool use_compression, bool append_mode);
 
 // If true, the file work is complete.
 bool fs_work_is_done(fs_work_t* work);

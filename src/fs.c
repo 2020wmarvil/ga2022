@@ -37,6 +37,7 @@ typedef struct fs_work_t
 	char path[1024];
 	bool null_terminate;
 	bool use_compression;
+	bool append_mode;
 	void* buffer;
 	size_t size;
 	event_t* done;
@@ -86,11 +87,12 @@ fs_work_t* fs_read(fs_t* fs, const char* path, heap_t* heap, bool null_terminate
 	work->result = 0;
 	work->null_terminate = null_terminate;
 	work->use_compression = use_compression;
+	work->append_mode = false;
 	queue_push(fs->file_queue, work);
 	return work;
 }
 
-fs_work_t* fs_write(fs_t* fs, const char* path, const void* buffer, size_t size, bool use_compression)
+fs_work_t* fs_write(fs_t* fs, const char* path, const void* buffer, size_t size, bool use_compression, bool append_mode)
 {
 	fs_work_t* work = heap_alloc(fs->heap, sizeof(fs_work_t), 8);
 	work->fs = fs;
@@ -103,6 +105,7 @@ fs_work_t* fs_write(fs_t* fs, const char* path, const void* buffer, size_t size,
 	work->result = 0;
 	work->null_terminate = false;
 	work->use_compression = use_compression;
+	work->append_mode = append_mode;
 
 	if (use_compression)
 	{
@@ -229,8 +232,23 @@ static void file_write(fs_work_t* work)
 		return;
 	}
 
-	HANDLE handle = CreateFile(wide_path, GENERIC_WRITE, FILE_SHARE_WRITE, NULL,
-		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE handle = INVALID_HANDLE_VALUE;
+
+	DWORD dwAttrib = GetFileAttributes(wide_path);
+	bool should_append = work->append_mode && dwAttrib != INVALID_FILE_ATTRIBUTES && !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY);
+
+	// Only write in append mode if the file already exists
+	if (should_append)
+	{
+		handle = CreateFile(wide_path, FILE_APPEND_DATA, FILE_SHARE_WRITE, NULL,
+			OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	}
+	else
+	{
+		handle = CreateFile(wide_path, GENERIC_WRITE, FILE_SHARE_WRITE, NULL,
+			CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	}
+
 	if (handle == INVALID_HANDLE_VALUE)
 	{
 		work->result = GetLastError();
@@ -239,7 +257,14 @@ static void file_write(fs_work_t* work)
 	}
 
 	DWORD bytes_written = 0;
-	if (!WriteFile(handle, work->buffer, (DWORD)work->size, &bytes_written, NULL))
+
+	// move file pointer to eof
+	if (should_append)
+	{
+		bytes_written = SetFilePointer(handle, 0l, NULL, FILE_END);
+	}
+
+	if (!WriteFile(handle, work->buffer, (DWORD)work->size, &bytes_written, NULL) || bytes_written == INVALID_SET_FILE_POINTER)
 	{
 		work->result = GetLastError();
 		CloseHandle(handle);

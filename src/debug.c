@@ -54,7 +54,7 @@ void debug_print(uint32_t type, _Printf_format_string_ const char* format, ...)
 
 	va_list args;
 	va_start(args, format);
-	char buffer[256];
+	char buffer[1024];
 	vsnprintf(buffer, sizeof(buffer), format, args);
 	va_end(args);
 

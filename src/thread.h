@@ -18,3 +18,6 @@ int thread_destroy(thread);
 // Puts the calling thread to sleep for the specified number of milliseconds.
 // Thread will sleep for *approximately* the specified time.
 void thread_sleep(uint32_t ms);
+
+// Returns the current thread id
+int get_current_thread_id();
