@@ -1,7 +1,11 @@
+#include "frogger_game.h"
+
+#include "debug.h"
 #include "ecs.h"
 #include "fs.h"
 #include "gpu.h"
 #include "heap.h"
+#include "net.h"
 #include "render.h"
 #include "timer_object.h"
 #include "transform.h"
@@ -45,6 +49,7 @@ typedef struct frogger_game_t
 	fs_t* fs;
 	wm_window_t* window;
 	render_t* render;
+	net_t* net;
 
 	timer_object_t* timer;
 
@@ -70,7 +75,7 @@ static void spawn_camera(frogger_game_t* game);
 static void update_players(frogger_game_t* game);
 static void draw_models(frogger_game_t* game);
 
-frogger_game_t* frogger_game_create(heap_t* heap, fs_t* fs, wm_window_t* window, render_t* render)
+frogger_game_t* frogger_game_create(heap_t* heap, fs_t* fs, wm_window_t* window, render_t* render, int argc, const char** argv)
 {
 	frogger_game_t* game = heap_alloc(heap, sizeof(frogger_game_t), 8);
 	game->heap = heap;
@@ -87,6 +92,20 @@ frogger_game_t* frogger_game_create(heap_t* heap, fs_t* fs, wm_window_t* window,
 	game->player_type = ecs_register_component_type(game->ecs, "player", sizeof(player_component_t), _Alignof(player_component_t));
 	game->name_type = ecs_register_component_type(game->ecs, "name", sizeof(name_component_t), _Alignof(name_component_t));
 
+	game->net = net_create(heap, game->ecs);
+	if (argc >= 2)
+	{
+		net_address_t server;
+		if (net_string_to_address(argv[1], &server))
+		{
+			net_connect(game->net, &server);
+		}
+		else
+		{
+			debug_print(k_print_error, "Unable to resolve server address: %s\n", argv[1]);
+		}
+	}
+
 	load_resources(game);
 	spawn_player(game, 0);
 	spawn_camera(game);
@@ -96,6 +115,7 @@ frogger_game_t* frogger_game_create(heap_t* heap, fs_t* fs, wm_window_t* window,
 
 void frogger_game_destroy(frogger_game_t* game)
 {
+	net_destroy(game->net);
 	ecs_destroy(game->ecs);
 	timer_object_destroy(game->timer);
 	unload_resources(game);
@@ -106,6 +126,7 @@ void frogger_game_update(frogger_game_t* game)
 {
 	timer_object_update(game->timer);
 	ecs_update(game->ecs);
+	net_update(game->net);
 	update_players(game);
 	draw_models(game);
 	render_push_done(game->render);
@@ -162,8 +183,19 @@ static void load_resources(frogger_game_t* game)
 
 static void unload_resources(frogger_game_t* game)
 {
+	heap_free(game->heap, fs_work_get_buffer(game->vertex_shader_work));
+	heap_free(game->heap, fs_work_get_buffer(game->fragment_shader_work));
 	fs_work_destroy(game->fragment_shader_work);
 	fs_work_destroy(game->vertex_shader_work);
+}
+
+static void player_net_configure(ecs_t* ecs, ecs_entity_ref_t entity, int type, void* user)
+{
+	frogger_game_t* game = user;
+
+	model_component_t* model_comp = ecs_entity_get_component(ecs, entity, game->model_type, true);
+	model_comp->mesh_info = &game->cube_mesh;
+	model_comp->shader_info = &game->cube_shader;
 }
 
 static void spawn_player(frogger_game_t* game, int index)
@@ -177,7 +209,6 @@ static void spawn_player(frogger_game_t* game, int index)
 
 	transform_component_t* transform_comp = ecs_entity_get_component(game->ecs, game->player_ent, game->transform_type, true);
 	transform_identity(&transform_comp->transform);
-	transform_comp->transform.translation.y = (float)index * 5.0f;
 
 	name_component_t* name_comp = ecs_entity_get_component(game->ecs, game->player_ent, game->name_type, true);
 	strcpy_s(name_comp->name, sizeof(name_comp->name), "player");
@@ -189,6 +220,16 @@ static void spawn_player(frogger_game_t* game, int index)
 	model_component_t* model_comp = ecs_entity_get_component(game->ecs, game->player_ent, game->model_type, true);
 	model_comp->mesh_info = &game->cube_mesh;
 	model_comp->shader_info = &game->cube_shader;
+
+	uint64_t k_player_ent_net_mask =
+		(1ULL << game->transform_type) |
+		(1ULL << game->model_type) |
+		(1ULL << game->name_type);
+	uint64_t k_player_ent_rep_mask =
+		(1ULL << game->transform_type);
+	net_state_register_entity_type(game->net, 0, k_player_ent_net_mask, k_player_ent_rep_mask, player_net_configure, game);
+
+	net_state_register_entity_instance(game->net, 0, game->player_ent);
 }
 
 static void spawn_camera(frogger_game_t* game)

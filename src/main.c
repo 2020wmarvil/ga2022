@@ -7,6 +7,8 @@
 #include "timer.h"
 #include "wm.h"
 
+#include "miniaudio/miniaudio.h"
+
 int main(int argc, const char* argv[])
 {
 	debug_set_print_mask(k_print_info | k_print_warning | k_print_error);
@@ -19,8 +21,8 @@ int main(int argc, const char* argv[])
 	wm_window_t* window = wm_create(heap);
 	render_t* render = render_create(heap, window);
 
-	//simple_game_t* game = simple_game_create(heap, fs, window, render);
-	frogger_game_t* game = frogger_game_create(heap, fs, window, render);
+	//simple_game_t* game = simple_game_create(heap, fs, window, render, argc, argv);
+	frogger_game_t* game = frogger_game_create(heap, fs, window, render, argc, argv);
 
 	while (!wm_pump(window))
 	{
