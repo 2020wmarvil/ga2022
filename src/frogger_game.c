@@ -13,8 +13,8 @@
 
 #include <stdlib.h>
 
-#define MINIAUDIO_IMPLEMENTATION
-#include "miniaudio/miniaudio.h"
+//#define MINIAUDIO_IMPLEMENTATION
+//#include "miniaudio/miniaudio.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -79,7 +79,7 @@ typedef struct frogger_game_t
 	wm_window_t* window;
 	render_t* render;
 	net_t* net;
-	ma_engine audio_engine;
+	//ma_engine audio_engine;
 
 	timer_object_t* timer;
 
@@ -125,7 +125,7 @@ frogger_game_t* frogger_game_create(heap_t* heap, fs_t* fs, wm_window_t* window,
 	game->window = window;
 	game->render = render;
 
-	ma_engine_init(NULL, &game->audio_engine);
+	//ma_engine_init(NULL, &game->audio_engine);
 
 	game->timer = timer_object_create(heap, NULL);
 	
@@ -161,7 +161,7 @@ frogger_game_t* frogger_game_create(heap_t* heap, fs_t* fs, wm_window_t* window,
 
 void frogger_game_destroy(frogger_game_t* game)
 {
-	ma_engine_uninit(&game->audio_engine);
+	//ma_engine_uninit(&game->audio_engine);
 	net_destroy(game->net);
 	ecs_destroy(game->ecs);
 	timer_object_destroy(game->timer);
@@ -315,7 +315,7 @@ static void reset_player_position(frogger_game_t* game)
 	transform_multiply(&transform_comp->transform, &move);
 
 	// play frog sound
-	ma_engine_play_sound(&game->audio_engine, "sounds/ribbit.mp3", NULL);
+	//ma_engine_play_sound(&game->audio_engine, "sounds/ribbit.mp3", NULL);
 }
 
 static void enable_car(frogger_game_t* game, ecs_entity_ref_t car_ent)

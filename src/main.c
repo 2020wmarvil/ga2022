@@ -1,9 +1,9 @@
+#include "audio.h"
 #include "debug.h"
 #include "fs.h"
 #include "heap.h"
+#include "raymarch_demo.h"
 #include "render.h"
-//#include "simple_game.h"
-#include "frogger_game.h"
 #include "timer.h"
 #include "wm.h"
 
@@ -22,21 +22,20 @@ int main(int argc, const char* argv[])
 	fs_t* fs = fs_create(heap, 8);
 	wm_window_t* window = wm_create(heap);
 	render_t* render = render_create(heap, window);
+	audio_t* audio = audio_create(heap);
 
-	//simple_game_t* game = simple_game_create(heap, fs, window, render, argc, argv);
-	frogger_game_t* game = frogger_game_create(heap, fs, window, render, argc, argv);
+	raymarch_demo_t* demo = raymarch_demo_create(heap, fs, window, render, audio, argc, argv);
 
 	while (!wm_pump(window))
 	{
-		//simple_game_update(game);
-		frogger_game_update(game);
+		raymarch_demo_update(demo);
 	}
 
 	/* XXX: Shutdown render before the game. Render uses game resources. */
 	render_destroy(render);
+	audio_destroy(audio);
 
-	//simple_game_destroy(game);
-	frogger_game_destroy(game);
+	raymarch_demo_destroy(demo);
 
 	wm_destroy(window);
 	fs_destroy(fs);
