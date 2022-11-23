@@ -34,6 +34,12 @@ k_key_map[] =
 	{ .virtual_key = VK_RIGHT, .ga_key = k_key_right, },
 	{ .virtual_key = VK_UP, .ga_key = k_key_up, },
 	{ .virtual_key = VK_DOWN, .ga_key = k_key_down, },
+	{ .virtual_key = 0x41, .ga_key = k_key_a, },
+	{ .virtual_key = 0x44, .ga_key = k_key_d, },
+	{ .virtual_key = 0x57, .ga_key = k_key_w, },
+	{ .virtual_key = 0x53, .ga_key = k_key_s, },
+	{ .virtual_key = 0x51, .ga_key = k_key_q, },
+	{ .virtual_key = 0x45, .ga_key = k_key_e, },
 };
 
 static LRESULT CALLBACK _window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -161,6 +167,8 @@ wm_window_t* wm_create(heap_t* heap)
 	win->mouse_mask = 0;
 	win->quit = false;
 	win->heap = heap;
+	win->mouse_x = 0;
+	win->mouse_y = 0;
 
 	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)win);
 

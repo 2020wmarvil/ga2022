@@ -12,8 +12,7 @@
 #include "transform.h"
 #include "wm.h"
 
-#define CAMERA_SPEED 4.0f
-#define MOUSE_SENSITIVITY 0.1f
+#define CAMERA_SPEED 1.0f
 
 typedef struct transform_component_t
 {
@@ -29,8 +28,6 @@ typedef struct camera_component_t
 	vec3f_t eye_pos;
 	vec3f_t forward;
 	vec3f_t up;
-	float yaw;
-	float pitch;
 } camera_component_t;
 
 typedef struct model_component_t
@@ -174,9 +171,6 @@ static void spawn_camera(raymarch_demo_t* demo)
 	camera_comp->forward = vec3f_forward();
 	camera_comp->up = vec3f_up();
 	mat4f_make_lookat(&camera_comp->view, &camera_comp->eye_pos, &camera_comp->forward, &camera_comp->up);
-
-	camera_comp->yaw = 0.0f;
-	camera_comp->pitch = 180.0f;
 }
 
 static void spawn_screen_quad(raymarch_demo_t* demo)
@@ -190,72 +184,6 @@ static void spawn_screen_quad(raymarch_demo_t* demo)
 	model_component_t* model_comp = ecs_entity_get_component(demo->ecs, demo->screen_quad_ent, demo->model_type, true);
 	model_comp->mesh_info = &demo->quad_mesh;
 	model_comp->shader_info = &demo->raymarch_shader;
-}
-
-static void update_camera(raymarch_demo_t* demo)
-{
-	float dt = (float)timer_object_get_delta_ms(demo->timer) * 0.001f;
-
-	uint32_t key_mask = wm_get_key_mask(demo->window);
-
-	int mouse_x;
-	int mouse_y;
-	wm_get_mouse_move(demo->window, &mouse_x, &mouse_y);
-
-	camera_component_t* camera_comp = ecs_entity_get_component(demo->ecs, demo->camera_ent, demo->camera_type, true);
-	
-	// Adapted from the learnopengl.com camera script
-	float xoffset = mouse_x * MOUSE_SENSITIVITY;
-	float yoffset = mouse_y * MOUSE_SENSITIVITY;
-
-    camera_comp->pitch -= xoffset;
-    camera_comp->yaw -= yoffset;
-
-    // make sure that when pitch is out of bounds, screen doesn't get flipped
-	if (camera_comp->yaw > 89.0f)
-	{
-		camera_comp->yaw = 89.0f;
-	}
-	else if (camera_comp->yaw < -89.0f)
-	{
-		camera_comp->yaw = -89.0f;
-	}
-
-    vec3f_t forward;
-    forward.x = (float)(cos(degrees_to_radians(camera_comp->yaw)) * cos(degrees_to_radians(camera_comp->pitch)));
-    forward.y = (float)(sin(degrees_to_radians(camera_comp->pitch)));
-    forward.z = (float)(sin(degrees_to_radians(camera_comp->yaw)) * cos(degrees_to_radians(camera_comp->pitch)));
-    camera_comp->forward = vec3f_norm(forward);
-
-	mat4f_make_lookat(&camera_comp->view, &camera_comp->eye_pos, &camera_comp->forward, &camera_comp->up);
-
-	vec3f_t right = vec3f_norm(vec3f_cross(camera_comp->forward, camera_comp->up));
-	vec3f_t up = vec3f_norm(vec3f_cross(camera_comp->forward, right));
-
-	if (key_mask & (k_key_up | k_key_w))
-	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(camera_comp->forward, dt * CAMERA_SPEED));
-	}
-	if (key_mask & (k_key_down | k_key_s))
-	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(camera_comp->forward, dt * -CAMERA_SPEED));
-	}
-	if (key_mask & (k_key_left | k_key_a))
-	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(right, dt * -CAMERA_SPEED));
-	}
-	if (key_mask & (k_key_right | k_key_d))
-	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(right, dt * CAMERA_SPEED));
-	}
-	if (key_mask & k_key_q)
-	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(up, dt * -CAMERA_SPEED));
-	}
-	if (key_mask & k_key_e)
-	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(up, dt * CAMERA_SPEED));
-	}
 }
 
 static void draw_models(raymarch_demo_t* demo)
@@ -276,4 +204,47 @@ static void draw_models(raymarch_demo_t* demo)
 	gpu_uniform_buffer_info_t uniform_info = { .data = &uniform_data, sizeof(uniform_data) };
 	
 	render_push_model(demo->render, &demo->screen_quad_ent, model_comp->mesh_info, model_comp->shader_info, &uniform_info);
+}
+
+static void update_camera(raymarch_demo_t* demo)
+{
+	float dt = (float)timer_object_get_delta_ms(demo->timer) * 0.001f;
+
+	uint32_t key_mask = wm_get_key_mask(demo->window);
+
+	int mouse_x;
+	int mouse_y;
+	wm_get_mouse_move(demo->window, &mouse_x, &mouse_y);
+
+	camera_component_t* camera_comp = ecs_entity_get_component(demo->ecs, demo->camera_ent, demo->camera_type, true);
+
+	if (key_mask & k_key_up)
+	{
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(vec3f_up(), dt * -CAMERA_SPEED));
+	}
+	if (key_mask & k_key_down)
+	{
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(vec3f_up(), dt * CAMERA_SPEED));
+	}
+	if (key_mask & k_key_left)
+	{
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(vec3f_right(), dt * -CAMERA_SPEED));
+	}
+	if (key_mask & k_key_right)
+	{
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(vec3f_right(), dt * CAMERA_SPEED));
+	}
+
+    //if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    //    cameraPos += cameraSpeed * cameraFront;
+    //if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    //    cameraPos -= cameraSpeed * cameraFront;
+    //if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    //    cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+    //if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    //    cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	
+	//mat4f_t view;
+	//mat4f_make_lookat(&view, &camera_comp->eye_pos, &camera_comp->forward, &camera_comp->up);
+	//glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 }

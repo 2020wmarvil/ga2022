@@ -27,8 +27,13 @@ enum
 	k_key_down = 1 << 1,
 	k_key_left = 1 << 2,
 	k_key_right = 1 << 3,
+	k_key_a = 1 << 4,
+	k_key_d = 1 << 5,
+	k_key_w = 1 << 6,
+	k_key_s = 1 << 7,
+	k_key_q = 1 << 8,
+	k_key_e = 1 << 9,
 };
-
 
 // Creates a new window. Must be destroyed with wm_destroy().
 // Returns NULL on failure, otherwise a new window.

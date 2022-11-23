@@ -9,6 +9,7 @@
 #include <math.h>
 
 #define MICRO_TO_MILLI 1000
+#define DEGREES_TO_RADIANS M_PI / 180.0f;
 
 // Determines if two scalar values are nearly equal
 // given the limitations of floating point accuracy.
@@ -31,4 +32,9 @@ __forceinline bool almost_equalf(float a, float b)
 __forceinline float lerpf(float begin, float end, float distance)
 {
 	return (begin * (1.0f - distance)) + (end * distance);
+}
+
+__forceinline float degrees_to_radians(float degrees)
+{
+	return degrees * (float)DEGREES_TO_RADIANS;
 }
