@@ -245,6 +245,18 @@
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(FullPath).spv</Outputs>
     </CustomBuild>
   </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="shaders\raymarch.frag">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">vulkan\glslc.exe -c "%(FullPath)" -o "%(FullPath).spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(FullPath).spv</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="shaders\raymarch.vert">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">vulkan\glslc.exe -c "%(FullPath)" -o "%(FullPath).spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(FullPath).spv</Outputs>
+    </CustomBuild>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

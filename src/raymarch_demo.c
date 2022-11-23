@@ -119,8 +119,8 @@ void raymarch_demo_update(raymarch_demo_t* demo)
 
 static void load_resources(raymarch_demo_t* demo)
 {
-	demo->vertex_shader_work = fs_read(demo->fs, "shaders/triangle.vert.spv", demo->heap, false, false);
-	demo->fragment_shader_work = fs_read(demo->fs, "shaders/triangle.frag.spv", demo->heap, false, false);
+	demo->vertex_shader_work = fs_read(demo->fs, "shaders/raymarch.vert.spv", demo->heap, false, false);
+	demo->fragment_shader_work = fs_read(demo->fs, "shaders/raymarch.frag.spv", demo->heap, false, false);
 	demo->raymarch_shader = (gpu_shader_info_t)
 	{
 		.vertex_shader_data = fs_work_get_buffer(demo->vertex_shader_work),
