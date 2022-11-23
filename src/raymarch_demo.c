@@ -6,16 +6,11 @@
 #include "fs.h"
 #include "gpu.h"
 #include "heap.h"
+#include "math.h"
 #include "render.h"
 #include "timer_object.h"
 #include "transform.h"
 #include "wm.h"
-
-#include <stdlib.h>
-
-#define _USE_MATH_DEFINES
-#include <math.h>
-#include <string.h>
 
 #define CAMERA_SPEED 1.0f
 
@@ -27,7 +22,11 @@ typedef struct transform_component_t
 typedef struct camera_component_t
 {
 	mat4f_t projection;
-	mat4f_t view;
+
+	// used to compose the view matrix
+	vec3f_t eye_pos;
+	vec3f_t forward;
+	vec3f_t up;
 } camera_component_t;
 
 typedef struct model_component_t
@@ -52,10 +51,10 @@ typedef struct raymarch_demo_t
 	int model_type;
 
 	ecs_entity_ref_t camera_ent;
-	ecs_entity_ref_t screen_ent;
+	ecs_entity_ref_t screen_quad_ent;
 
-	gpu_mesh_info_t player_mesh;
-	gpu_shader_info_t cube_shader;
+	gpu_mesh_info_t quad_mesh;
+	gpu_shader_info_t raymarch_shader;
 	fs_work_t* vertex_shader_work;
 	fs_work_t* fragment_shader_work;
 
@@ -64,8 +63,8 @@ typedef struct raymarch_demo_t
 
 static void load_resources(raymarch_demo_t* demo);
 static void unload_resources(raymarch_demo_t* demo);
-static void spawn_screen_quad(raymarch_demo_t* demo);
 static void spawn_camera(raymarch_demo_t* demo);
+static void spawn_screen_quad(raymarch_demo_t* demo);
 static void update_camera(raymarch_demo_t* demo);
 static void draw_models(raymarch_demo_t* demo);
 
@@ -118,7 +117,7 @@ static void load_resources(raymarch_demo_t* demo)
 {
 	demo->vertex_shader_work = fs_read(demo->fs, "shaders/triangle.vert.spv", demo->heap, false, false);
 	demo->fragment_shader_work = fs_read(demo->fs, "shaders/triangle.frag.spv", demo->heap, false, false);
-	demo->cube_shader = (gpu_shader_info_t)
+	demo->raymarch_shader = (gpu_shader_info_t)
 	{
 		.vertex_shader_data = fs_work_get_buffer(demo->vertex_shader_work),
 		.vertex_shader_size = fs_work_get_size(demo->vertex_shader_work),
@@ -129,19 +128,19 @@ static void load_resources(raymarch_demo_t* demo)
 
 	static vec3f_t quad_verts[] =
 	{
-		{ -1.0f, -1.0f, 0.0f },
-		{ -1.0f,  1.0f, 0.0f },
-		{  1.0f, -1.0f, 0.0f },
-		{  1.0f,  1.0f, 0.0f },
+		{  0.0f, -1.0f,  1.0f },
+		{  0.0f,  1.0f,  1.0f },
+		{  0.0f, -1.0f, -1.0f },
+		{  0.0f,  1.0f, -1.0f },
 	};
 
 	static uint16_t quad_indices[] =
 	{
-		0, 1, 2,
-		1, 3, 2,
+		0, 2, 3,
+		3, 1, 0,
 	};
 
-	demo->player_mesh = (gpu_mesh_info_t)
+	demo->quad_mesh = (gpu_mesh_info_t)
 	{
 		.layout = k_gpu_mesh_layout_tri_p444_i2,
 		.vertex_data = quad_verts,
@@ -159,18 +158,6 @@ static void unload_resources(raymarch_demo_t* demo)
 	fs_work_destroy(demo->vertex_shader_work);
 }
 
-static void spawn_screen_quad(raymarch_demo_t* demo)
-{
-	uint64_t k_screen_ent_mask =
-		(1ULL << demo->transform_type) |
-		(1ULL << demo->model_type);
-	demo->screen_ent = ecs_entity_add(demo->ecs, k_screen_ent_mask);
-
-	model_component_t* model_comp = ecs_entity_get_component(demo->ecs, demo->screen_ent, demo->model_type, true);
-	model_comp->mesh_info = &demo->player_mesh;
-	model_comp->shader_info = &demo->cube_shader;
-}
-
 static void spawn_camera(raymarch_demo_t* demo)
 {
 	uint64_t k_camera_ent_mask = (1ULL << demo->camera_type);
@@ -179,10 +166,22 @@ static void spawn_camera(raymarch_demo_t* demo)
 	camera_component_t* camera_comp = ecs_entity_get_component(demo->ecs, demo->camera_ent, demo->camera_type, true);
 	mat4f_make_perspective(&camera_comp->projection, (float)M_PI / 2.0f, 16.0f / 9.0f, 0.1f, 100.0f);
 
-	vec3f_t eye_pos = vec3f_scale(vec3f_forward(), -5.0f);
-	vec3f_t forward = vec3f_forward();
-	vec3f_t up = vec3f_up();
-	mat4f_make_lookat(&camera_comp->view, &eye_pos, &forward, &up);
+	camera_comp->eye_pos = vec3f_scale(vec3f_forward(), -5.0f);
+	camera_comp->forward = vec3f_forward();
+	camera_comp->up = vec3f_up();
+}
+
+static void spawn_screen_quad(raymarch_demo_t* demo)
+{
+	uint64_t k_screen_quad_ent_mask = (1ULL << demo->transform_type) | (1ULL << demo->model_type);
+	demo->screen_quad_ent = ecs_entity_add(demo->ecs, k_screen_quad_ent_mask);
+
+	transform_component_t* transform_comp = ecs_entity_get_component(demo->ecs, demo->screen_quad_ent, demo->transform_type, true);
+	transform_identity(&transform_comp->transform);
+
+	model_component_t* model_comp = ecs_entity_get_component(demo->ecs, demo->screen_quad_ent, demo->model_type, true);
+	model_comp->mesh_info = &demo->quad_mesh;
+	model_comp->shader_info = &demo->raymarch_shader;
 }
 
 static void update_camera(raymarch_demo_t* demo)
@@ -190,42 +189,31 @@ static void update_camera(raymarch_demo_t* demo)
 	float dt = (float)timer_object_get_delta_ms(demo->timer) * 0.001f;
 
 	uint32_t key_mask = wm_get_key_mask(demo->window);
-	uint64_t k_query_mask = (1ULL << demo->transform_type) | (1ULL << demo->camera_type);
+	camera_component_t* camera_comp = ecs_entity_get_component(demo->ecs, demo->camera_ent, demo->camera_type, true);
 
-	for (ecs_query_t query = ecs_query_create(demo->ecs, k_query_mask);
-		ecs_query_is_valid(demo->ecs, &query);
-		ecs_query_next(demo->ecs, &query))
+	if (key_mask & k_key_up)
 	{
-		transform_component_t* transform_comp = ecs_query_get_component(demo->ecs, &query, demo->transform_type);
-		camera_component_t* camera_comp = ecs_query_get_component(demo->ecs, &query, demo->camera_type);
-
-		transform_t move;
-		transform_identity(&move);
-		if (key_mask & k_key_up)
-		{
-			move.translation = vec3f_add(move.translation, vec3f_scale(vec3f_up(), dt * -CAMERA_SPEED));
-		}
-		if (key_mask & k_key_down)
-		{
-			move.translation = vec3f_add(move.translation, vec3f_scale(vec3f_up(), dt * CAMERA_SPEED));
-		}
-		if (key_mask & k_key_left)
-		{
-			move.translation = vec3f_add(move.translation, vec3f_scale(vec3f_right(), dt * -CAMERA_SPEED));
-		}
-		if (key_mask & k_key_right)
-		{
-			move.translation = vec3f_add(move.translation, vec3f_scale(vec3f_right(), dt * CAMERA_SPEED));
-		}
-		transform_multiply(&transform_comp->transform, &move);
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(vec3f_up(), dt * -CAMERA_SPEED));
+	}
+	if (key_mask & k_key_down)
+	{
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(vec3f_up(), dt * CAMERA_SPEED));
+	}
+	if (key_mask & k_key_left)
+	{
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(vec3f_right(), dt * -CAMERA_SPEED));
+	}
+	if (key_mask & k_key_right)
+	{
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(vec3f_right(), dt * CAMERA_SPEED));
 	}
 }
 
 static void draw_models(raymarch_demo_t* demo)
 {
 	camera_component_t* camera_comp = ecs_entity_get_component(demo->ecs, demo->camera_ent, demo->camera_type, true);
-	model_component_t* model_comp = ecs_entity_get_component(demo->ecs, demo->screen_ent, demo->model_type, true);
-	transform_component_t* model_trans_comp = ecs_entity_get_component(demo->ecs, demo->screen_ent, demo->transform_type, true);
+	model_component_t* model_comp = ecs_entity_get_component(demo->ecs, demo->screen_quad_ent, demo->model_type, true);
+	transform_component_t* model_trans_comp = ecs_entity_get_component(demo->ecs, demo->screen_quad_ent, demo->transform_type, true);
 
 	struct
 	{
@@ -234,9 +222,13 @@ static void draw_models(raymarch_demo_t* demo)
 		mat4f_t view;
 	} uniform_data;
 	uniform_data.projection = camera_comp->projection;
-	uniform_data.view = camera_comp->view;
+
+	mat4f_t view;
+	mat4f_make_lookat(&view, &camera_comp->eye_pos, &camera_comp->forward, &camera_comp->up);
+	uniform_data.view = view;
+
 	transform_to_matrix(&model_trans_comp->transform, &uniform_data.model);
 	gpu_uniform_buffer_info_t uniform_info = { .data = &uniform_data, sizeof(uniform_data) };
 	
-	render_push_model(demo->render, &demo->screen_ent, model_comp->mesh_info, model_comp->shader_info, &uniform_info);
+	render_push_model(demo->render, &demo->screen_quad_ent, model_comp->mesh_info, model_comp->shader_info, &uniform_info);
 }

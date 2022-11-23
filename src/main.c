@@ -3,6 +3,7 @@
 #include "fs.h"
 #include "heap.h"
 #include "raymarch_demo.h"
+#include "simple_game.h"
 #include "render.h"
 #include "timer.h"
 #include "wm.h"
@@ -25,10 +26,12 @@ int main(int argc, const char* argv[])
 	audio_t* audio = audio_create(heap);
 
 	raymarch_demo_t* demo = raymarch_demo_create(heap, fs, window, render, audio, argc, argv);
+	//simple_game_t* game = simple_game_create(heap, fs, window, render, argc, argv);
 
 	while (!wm_pump(window))
 	{
 		raymarch_demo_update(demo);
+		//simple_game_update(game);
 	}
 
 	/* XXX: Shutdown render before the game. Render uses game resources. */
@@ -36,6 +39,7 @@ int main(int argc, const char* argv[])
 	audio_destroy(audio);
 
 	raymarch_demo_destroy(demo);
+	//simple_game_destroy(game);
 
 	wm_destroy(window);
 	fs_destroy(fs);

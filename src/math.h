@@ -3,8 +3,10 @@
 // Math helpers.
 
 #include <float.h>
-#include <math.h>
 #include <stdbool.h>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #define MICRO_TO_MILLI 1000
 
