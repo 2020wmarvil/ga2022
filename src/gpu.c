@@ -1465,6 +1465,52 @@ static void create_mesh_layouts(gpu_t* gpu)
 		gpu->mesh_index_size[k_gpu_mesh_layout_tri_p444_c444_i2] = 2;
 		gpu->mesh_vertex_size[k_gpu_mesh_layout_tri_p444_c444_i2] = 24;
 	}
+
+	// k_gpu_mesh_layout_tri_p444_uv44_i2
+	{
+		gpu->mesh_input_assembly_info[k_gpu_mesh_layout_tri_p444_uv44_i2] = (VkPipelineInputAssemblyStateCreateInfo)
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+			.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		};
+
+		VkVertexInputBindingDescription* vertex_binding = heap_alloc(gpu->heap, sizeof(VkVertexInputBindingDescription), 8);
+		*vertex_binding = (VkVertexInputBindingDescription)
+		{
+			.binding = 0,
+			.stride = 24,
+			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+		};
+
+		VkVertexInputAttributeDescription* vertex_attributes = heap_alloc(gpu->heap, sizeof(VkVertexInputAttributeDescription) * 2, 8);
+		vertex_attributes[0] = (VkVertexInputAttributeDescription)
+		{
+			.binding = 0,
+			.location = 0,
+			.format = VK_FORMAT_R32G32B32_SFLOAT,
+			.offset = 0,
+		};
+		vertex_attributes[1] = (VkVertexInputAttributeDescription)
+		{
+			.binding = 0,
+			.location = 1,
+			.format = VK_FORMAT_R32G32_SFLOAT,
+			.offset = 12,
+		};
+
+		gpu->mesh_vertex_input_info[k_gpu_mesh_layout_tri_p444_uv44_i2] = (VkPipelineVertexInputStateCreateInfo)
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+			.vertexBindingDescriptionCount = 1,
+			.pVertexBindingDescriptions = vertex_binding,
+			.vertexAttributeDescriptionCount = 2,
+			.pVertexAttributeDescriptions = vertex_attributes,
+		};
+
+		gpu->mesh_index_type[k_gpu_mesh_layout_tri_p444_uv44_i2] = VK_INDEX_TYPE_UINT16;
+		gpu->mesh_index_size[k_gpu_mesh_layout_tri_p444_uv44_i2] = 2;
+		gpu->mesh_vertex_size[k_gpu_mesh_layout_tri_p444_uv44_i2] = 20;
+	}
 }
 
 static void destroy_mesh_layouts(gpu_t* gpu)

@@ -132,10 +132,10 @@ static void load_resources(raymarch_demo_t* demo)
 
 	static vec3f_t quad_verts[] =
 	{
-		{  0.0f, -1.0f,  1.0f },
-		{  0.0f,  1.0f,  1.0f },
-		{  0.0f, -1.0f, -1.0f },
-		{  0.0f,  1.0f, -1.0f },
+		{ 0.0f, -1.0f,  1.0f }, { 0.0f, 0.0f },
+		{ 0.0f,  1.0f,  1.0f }, { 1.0f, 0.0f },
+		{ 0.0f, -1.0f, -1.0f }, { 0.0f, 1.0f },
+		{ 0.0f,  1.0f, -1.0f }, { 1.0f, 1.0f },
 	};
 
 	static uint16_t quad_indices[] =
@@ -146,7 +146,7 @@ static void load_resources(raymarch_demo_t* demo)
 
 	demo->quad_mesh = (gpu_mesh_info_t)
 	{
-		.layout = k_gpu_mesh_layout_tri_p444_i2,
+		.layout = k_gpu_mesh_layout_tri_p444_uv44_i2,
 		.vertex_data = quad_verts,
 		.vertex_data_size = sizeof(quad_verts),
 		.index_data = quad_indices,

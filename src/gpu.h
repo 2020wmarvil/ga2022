@@ -24,6 +24,7 @@ typedef enum gpu_mesh_layout_t
 {
 	k_gpu_mesh_layout_tri_p444_i2,
 	k_gpu_mesh_layout_tri_p444_c444_i2,
+	k_gpu_mesh_layout_tri_p444_uv44_i2,
 
 	k_gpu_mesh_layout_count,
 } gpu_mesh_layout_t;
