@@ -235,6 +235,7 @@ HitPacket raymarch(vec3 pos, vec3 rayDir) {
     float rayLightStep = rayLightStepMax / float(MAX_CLOUD_LIGHT_MARCHING_STEPS);
     
     vec3 sun_direction = normalize(vec3(1.0, 0.0, 0.0));
+	vec3 lightPos = cloudPos;
     float absorption = 100.0;
     float lightTransmittance = 1.0;
 	float transmittance = 1.0;
@@ -265,17 +266,20 @@ HitPacket raymarch(vec3 pos, vec3 rayDir) {
 		float cloudDensity = cloudSDF(position - cloudPos);
 		if (cloudDensity > 0.0) {
 		   for (int i = 0; i < MAX_CLOUD_MARCHING_STEPS; i++) {
-		   		vec3 cloud_position = position + rayDir * rayStep * i;
+		   		vec3 cloudPosition = position + rayDir * rayStep * i;
 
-				cloudDensity = cloudSDF(cloud_position - cloudPos);
+				cloudDensity = cloudSDF(cloudPosition - cloudPos);
 				if (cloudDensity < 0) break;
 
 				float tmp = cloudDensity / float(MAX_CLOUD_MARCHING_STEPS);
 				transmittance *= 1.0 - (tmp * absorption);
+
+				vec3 lightDir = lightPos - cloudPosition;
 				
 				if (transmittance > EPSILON) {
 				    for (int j = 0; j < MAX_CLOUD_LIGHT_MARCHING_STEPS; j++) {
-						vec3 light_position = cloud_position + sun_direction * rayLightStep * j;
+						//vec3 light_position = cloudPosition + sun_direction * rayLightStep * j;
+						vec3 light_position = cloudPosition + lightDir * rayLightStep * j;
 	
 				        float densityLight = cloudSDF(light_position);
 				        if (densityLight > 0.0) {
@@ -286,14 +290,17 @@ HitPacket raymarch(vec3 pos, vec3 rayDir) {
 				    }
 				    
 				    // Add ambient + light scattering color
-					float opacity = 10.0;
-					float opacityl = 15.0;
-					vec3 cloudColor = vec3(1.0, 0.75, 0.79);
-					vec3 lightColor = vec3(1.0, 0.75, 0.79);
+					float opacity = 30.0;
+					float opacityl = 50.0;
+					vec3 cloudColor = vec3(1.0);
+					vec3 lightColor = vec3(0.0, 1.0, 0);
+
+					//color += vec3(12, 0, 3), vec3(0.2), 10.0);
 
 				    float k = opacity * tmp * transmittance;
 				    float kl = opacityl * tmp * transmittance * lightTransmittance;
-				    cloudColorAcc += cloudColor * k + lightColor * kl;
+				    cloudColorAcc += cloudColor * k + lightColor * kl * 2;
+
 				}
 			}
 		}
@@ -453,6 +460,7 @@ void main()
 	  color += AddLight(hit, rayDir, lightPos3, lightColor3, 20.0);
 	  color += AddLight(hit, rayDir, vec3(-20, 10, 3), vec3(1, 1, 1), 20.0);
 	  color += AddLight(hit, rayDir, vec3(12, 0, 3), vec3(0.2), 10.0);
+	  color += AddLight(hit, rayDir, vec3(-20, -10, 2), vec3(0, 1, 0), 20.0);
 
 	  // ambient occlusion
       float occlusion = AmbientOcclusionAaltonen(hit.position, hit.normal);
