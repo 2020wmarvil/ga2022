@@ -47,6 +47,18 @@ float opUnion(float d1, float d2) { return min(d1,d2); }
 float opSubtraction(float d1, float d2) { return max(-d1,d2); }
 float opIntersection(float d1, float d2) { return max(d1,d2); }
 
+float opSmoothUnion( float d1, float d2, float k ) {
+    float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
+    return mix( d2, d1, h ) - k*h*(1.0-h); }
+
+float opSmoothSubtraction( float d1, float d2, float k ) {
+    float h = clamp( 0.5 - 0.5*(d2+d1)/k, 0.0, 1.0 );
+    return mix( d2, -d1, h ) + k*h*(1.0-h); }
+
+float opSmoothIntersection( float d1, float d2, float k ) {
+    float h = clamp( 0.5 - 0.5*(d2-d1)/k, 0.0, 1.0 );
+    return mix( d2, d1, h ) + k*h*(1.0-h); }
+
 float sphereSDF(vec3 p, float r) {
     return length(p) - r;
 }
@@ -91,23 +103,51 @@ float cylinderZSDF( vec3 p, float h, float r )
   return min(max(d.x,d.y),0.0) + length(max(d,0.0));
 }
 
-HitPacket sceneSDF(vec3 position)
+float opRep(vec3 p, vec3 c)
 {
+    vec3 q = mod(p+0.5*c,c)-0.5*c;
+    return boxSDF(q, vec3(1));
+}
+
+// Compute the scene SDF. This was messier than anticipated...
+HitPacket sceneSDF(vec3 position) {
+	float time = 0.005 * ubo.time;
 	float ground = sphereSDF(position - vec3(0.0, 0.0, -10000.0), 9998.0);
 
 	float csg_scene = opUnion(sphereSDF(position - vec3(2.0, 0.0, 0.0), 1),
 		opUnion(boxSDF(position - vec3(6.0, 8.0, 0.0), vec3(2, 2, 2)),
-		opUnion(torusSDF(position - vec3(0, 8, 8), vec2(5, 0.3)), 
+		opUnion(torusSDF(position - vec3(0, 15, 8), vec2(5, 0.3)), 
 		opUnion(opUnion(
-			boxSDF(position - vec3(-2, 8, 0), vec3(2, 2, 1)), sphereSDF(position - vec3(-2, 8, 0.5), 1)),
+			boxSDF(position - vec3(-2, 8, 0), vec3(2, 2, 1)), sphereSDF(position - vec3(-2, 8, 1.0 + sin(time)), 1)),
 		opUnion(opSubtraction(
-			boxSDF(position - vec3(-7, 8, 0), vec3(2, 2, 1)), sphereSDF(position - vec3(-7, 8, 0.5), 1)),
+			boxSDF(position - vec3(-7, 8, 0), vec3(2, 2, 1)), sphereSDF(position - vec3(-7, 8, 1.0 + sin(time)), 1)),
 		opUnion(opSubtraction(
-			sphereSDF(position - vec3(-12, 8, 0.5), 1), boxSDF(position - vec3(-12, 8, 0), vec3(2, 2, 1))),
+			sphereSDF(position - vec3(-12, 8, 1.0 + sin(time)), 1), boxSDF(position - vec3(-12, 8, 0), vec3(2, 2, 1))),
 		opUnion(opIntersection(
-			boxSDF(position - vec3(-17, 8, 0), vec3(2, 2, 1)), sphereSDF(position - vec3(-17, 8, 0.5), 1)),
+			boxSDF(position - vec3(-17, 8, 0), vec3(2, 2, 1)), sphereSDF(position - vec3(-17, 8, 1.0 + sin(time)), 1)),
 		frameSDF(position - vec3(15, 20, 5), vec3(8, 6, 4), 0.3)
 		)))))));
+
+	float smooth_ops = 
+		opUnion(
+		opUnion(
+		opUnion(
+			opSmoothUnion(
+				boxSDF(position - vec3(-2, 12, 0), vec3(2, 2, 1)), 
+				sphereSDF(position - vec3(-2, 12, 1.0 + sin(time)), 1), 0.5),
+			opSmoothSubtraction(
+				boxSDF(position - vec3(-7, 12, 0), vec3(2, 2, 1)), 
+				sphereSDF(position - vec3(-7, 12, 1.0 + sin(time)), 1), 1.0)),
+			opSmoothSubtraction(
+				sphereSDF(position - vec3(-12, 12, 1.0 + sin(time)), 1),
+				boxSDF(position - vec3(-12, 12, 0), vec3(2, 2, 1)),
+				0.5
+				)),
+			opSmoothIntersection(
+				boxSDF(position - vec3(-17, 12, 0), vec3(2, 2, 1)), 
+				sphereSDF(position - vec3(-17, 12, 1.0 + sin(time)), 1),
+				0.5
+				));
 
 	float csg_cylinders = opUnion(opUnion(
 		cylinderXSDF(position - vec3(12, 0, 2), 3, 2), 
@@ -118,7 +158,16 @@ HitPacket sceneSDF(vec3 position)
 		opIntersection(sphereSDF(position - vec3(12, 0, 2), 3), boxSDF(position - vec3(12, 0, 2), vec3(2.5)))
 		);
 
-	csg_scene = opUnion(csg_scene, csg_obj);
+	float csg_infinite = opIntersection(
+		boxSDF(position, vec3(200))
+			,
+			opSubtraction(
+				boxSDF(position, vec3(25)), 
+				opRep(position, vec3(20))
+			)
+		);
+
+	csg_scene = opUnion(opUnion(opUnion(csg_scene, csg_obj), smooth_ops), csg_infinite);
 
 	HitPacket hit;
 	if (ground < csg_scene) {
