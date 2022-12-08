@@ -20,16 +20,14 @@ layout (binding = 0) uniform UBO
 // https://www.shadertoy.com/view/lsKcDD
 // https://www.shadertoy.com/view/lss3zr
 
-#define MAX_MARCHING_STEPS 128
-#define MAX_SHADOW_MARCHING_STEPS 64
+#define MAX_MARCHING_STEPS 100
+#define MAX_SHADOW_MARCHING_STEPS 32
 #define EPSILON 0.01
 #define NEAR_DEPTH 0.1
 #define FAR_DEPTH 1000.0
-#define GROUND_COLOR vec3(0.58, 0.29, 0)
-#define SPHERE_COLOR vec3(1, 0, 0)
 
 #define MAX_CLOUD_MARCHING_STEPS 32
-#define MAX_CLOUD_LIGHT_MARCHING_STEPS 16
+#define MAX_CLOUD_LIGHT_MARCHING_STEPS 8
 
 struct HitPacket {
 	vec3 position;
@@ -156,7 +154,7 @@ float cloudSDF(vec3 position) {
 
 // Compute the scene SDF. This was messier than anticipated...
 float sceneSDF(vec3 position) {
-	float time = 0.005 * ubo.time;
+	float time = 0.001 * ubo.time;
 	float ground = sphereSDF(position - vec3(0.0, 0.0, -100000.0), 99998.0);
 
 	float csg_scene = opUnion(sphereSDF(position - vec3(2.0, 0.0, 0.0), 1),
@@ -378,58 +376,6 @@ vec3 AddLight(HitPacket hit, vec3 rayDir, vec3 lightPos, vec3 lightColor, float 
 float BeersLaw(float dist, float absorption) {
 	return exp(-dist * absorption);
 }
-
-/*
-vec4 raymarchCloud(vec3 pos, vec3 rayDir) {
-    float rayStepMax = 40.0;
-    float rayStep = rayStepMax / float(MAX_CLOUD_MARCHING_STEPS);
-    float rayLightStepMax = 20.0;
-    float rayLightStep = rayLightStepMax / float(MAX_CLOUD_LIGHT_MARCHING_STEPS);
-    
-    vec3 sun_direction = normalize(vec3(1.0, 0.0, 0.0));
-    float absorption = 100.0;
-    float transmittance = 1.0;
-    float lightTransmittance = 1.0;
-	float opacity = 50.0;
-	float opacityl = 30.0;
-	vec3 cloudColor = vec3(1.0, 0.75, 0.79);
-	vec3 lightColor = vec3(1.0, 0.75, 0.79);
-    
-    vec4 color = vec4(0.0);
-    
-    for (int i = 0; i < MAX_CLOUD_MARCHING_STEPS; i++) {
-		vec3 position = pos + rayDir * rayStep * i;
-
-        float density = cloudSDF(position);
-		float tmp = density / float(MAX_CLOUD_MARCHING_STEPS);
-        
-        if (density > 0.0) {
-            transmittance *= 1.0 - (tmp * absorption);
-            
-            if (transmittance <= EPSILON) break;
-            
-            for (int j = 0; j < MAX_CLOUD_LIGHT_MARCHING_STEPS; j++)
-            {
-				vec3 light_position = position + sun_direction * rayLightStep * j;
-
-                float densityLight = cloudSDF(light_position);
-                if (densityLight > 0.0)
-                {
-                    lightTransmittance *= 1.0 - (densityLight / float(MAX_CLOUD_LIGHT_MARCHING_STEPS) * absorption);
-                }
-                
-                if (lightTransmittance <= EPSILON) break;
-            }
-            
-            // Add ambient + light scattering color
-            float k = opacity * tmp * transmittance;
-            float kl = opacityl * tmp * transmittance * lightTransmittance;
-            color += cloudColor * k + lightColor * kl;
-        }
-    }
-    
-    return color;
-}*/
 
 void main()
 {

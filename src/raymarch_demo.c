@@ -94,7 +94,7 @@ raymarch_demo_t* raymarch_demo_create(heap_t* heap, fs_t* fs, wm_window_t* windo
 
 	demo->sound_index_background = audio_load_sound_from_file(demo->audio, "sounds/background.mp3");
 	audio_loop_sound(demo->audio, demo->sound_index_background, 1);
-	//audio_start_sound(demo->audio, demo->sound_index_background);
+	audio_start_sound(demo->audio, demo->sound_index_background);
 
 	return demo;
 }
@@ -235,17 +235,6 @@ static void update_camera(raymarch_demo_t* demo)
     camera_comp->forward = vec3f_norm(forward);
 
 	//mat4f_make_lookat(&camera_comp->view, &camera_comp->eye, &camera_comp->forward, &camera_comp->up);
-
-	debug_print(k_print_warning, "p/y (%f, %f)\neye (%f, %f, %f\nforward (%f, %f, %f)\n\n",
-		camera_comp->pitch,
-		camera_comp->yaw,
-		camera_comp->eye_pos.x,
-		camera_comp->eye_pos.y,
-		camera_comp->eye_pos.z,
-		camera_comp->forward.x,
-		camera_comp->forward.y,
-		camera_comp->forward.z
-	);
 
 	vec3f_t right = vec3f_norm(vec3f_cross(camera_comp->forward, camera_comp->up));
 	vec3f_t up = vec3f_norm(vec3f_cross(camera_comp->forward, right));
