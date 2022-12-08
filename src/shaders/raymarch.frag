@@ -18,6 +18,7 @@ layout (binding = 0) uniform UBO
 // https://iquilezles.org/articles/distfunctions/
 // https://michaelwalczyk.com/blog-ray-marching.html
 // https://www.shadertoy.com/view/lsKcDD
+// https://www.shadertoy.com/view/lss3zr
 
 #define MAX_MARCHING_STEPS 128
 #define MAX_SHADOW_MARCHING_STEPS 64
@@ -27,10 +28,13 @@ layout (binding = 0) uniform UBO
 #define GROUND_COLOR vec3(0.58, 0.29, 0)
 #define SPHERE_COLOR vec3(1, 0, 0)
 
+#define MAX_CLOUD_MARCHING_STEPS 32
+#define MAX_CLOUD_LIGHT_MARCHING_STEPS 16
+
 struct HitPacket {
 	vec3 position;
 	vec3 normal;
-	vec3 color;
+	vec3 cloudColor;
 	float depth;
 };
 
@@ -40,6 +44,42 @@ float ndot( in vec2 a, in vec2 b ) { return a.x*b.x - a.y*b.y; }
 
 float random(vec2 st) {
 	return fract(sin(dot(st.xy, vec2(12.9898,78.233)))* 43758.5453123);
+}
+
+float hash(float n)
+{
+    return fract(sin(n) * 43758.5453);
+}
+
+float noise(in vec3 x)
+{
+    vec3 p = floor(x);
+    vec3 f = fract(x);
+    
+    f = f * f * (3.0 - 2.0 * f);
+    
+    float n = p.x + p.y * 57.0 + 113.0 * p.z;
+    
+    float res = mix(mix(mix(hash(n +   0.0), hash(n +   1.0), f.x),
+                        mix(hash(n +  57.0), hash(n +  58.0), f.x), f.y),
+                    mix(mix(hash(n + 113.0), hash(n + 114.0), f.x),
+                        mix(hash(n + 170.0), hash(n + 171.0), f.x), f.y), f.z);
+    return res;
+}
+
+float fbm(vec3 p)
+{
+    float f;
+    f  = 10.000 * noise(p); 
+	p *= 2.02;
+    f  = 5.000 * noise(p); 
+	p *= 2.02;
+    f += 2.50 * noise(p); 
+	p *= 2.03;
+    f += 1.250 * noise(p);
+	p *= 2.04;
+    f += 0.625 * noise(p);
+    return f;
 }
 
 // Inigo Quilez's SDF functions
@@ -85,6 +125,7 @@ float frameSDF( vec3 p, vec3 b, float e )
       length(max(vec3(q.x,q.y,p.z),0.0))+min(max(q.x,max(q.y,p.z)),0.0));
 }
 
+
 float cylinderXSDF( vec3 p, float h, float r )
 {
   vec2 d = abs(vec2(length(p.yz),p.x)) - vec2(r,h);
@@ -109,10 +150,14 @@ float opRep(vec3 p, vec3 c)
     return boxSDF(q, vec3(1));
 }
 
+float cloudSDF(vec3 position) {
+	return 0.1 - length(position) * 0.05 + 0.04 * fbm(position * 0.3 + vec3(ubo.time*0.001, 10, 0));
+}
+
 // Compute the scene SDF. This was messier than anticipated...
-HitPacket sceneSDF(vec3 position) {
+float sceneSDF(vec3 position) {
 	float time = 0.005 * ubo.time;
-	float ground = sphereSDF(position - vec3(0.0, 0.0, -10000.0), 9998.0);
+	float ground = sphereSDF(position - vec3(0.0, 0.0, -100000.0), 99998.0);
 
 	float csg_scene = opUnion(sphereSDF(position - vec3(2.0, 0.0, 0.0), 1),
 		opUnion(boxSDF(position - vec3(6.0, 8.0, 0.0), vec3(2, 2, 2)),
@@ -159,63 +204,98 @@ HitPacket sceneSDF(vec3 position) {
 		);
 
 	float csg_infinite = opIntersection(
-		boxSDF(position, vec3(200))
-			,
+		boxSDF(position, vec3(200)),
 			opSubtraction(
 				boxSDF(position, vec3(25)), 
 				opRep(position, vec3(20))
 			)
 		);
 
-	csg_scene = opUnion(opUnion(opUnion(csg_scene, csg_obj), smooth_ops), csg_infinite);
-
-	HitPacket hit;
-	if (ground < csg_scene) {
-		hit.depth = ground;
-		hit.color = GROUND_COLOR;
-	} else {
-		hit.depth = csg_scene;
-		hit.color = SPHERE_COLOR;
-	}
-
-	return hit;
+	return opUnion(opUnion(opUnion(opUnion(csg_scene, csg_obj), smooth_ops), csg_infinite), ground);
 }
 
 vec3 estimateNormal(vec3 p) {
 	// approximate the normal by computing the gradient on x y z
     return normalize(vec3(
-        sceneSDF(vec3(p.x + EPSILON, p.y, p.z)).depth - sceneSDF(vec3(p.x - EPSILON, p.y, p.z)).depth,
-        sceneSDF(vec3(p.x, p.y + EPSILON, p.z)).depth - sceneSDF(vec3(p.x, p.y - EPSILON, p.z)).depth,
-        sceneSDF(vec3(p.x, p.y, p.z  + EPSILON)).depth - sceneSDF(vec3(p.x, p.y, p.z - EPSILON)).depth
+        sceneSDF(vec3(p.x + EPSILON, p.y, p.z)) - sceneSDF(vec3(p.x - EPSILON, p.y, p.z)),
+        sceneSDF(vec3(p.x, p.y + EPSILON, p.z)) - sceneSDF(vec3(p.x, p.y - EPSILON, p.z)),
+        sceneSDF(vec3(p.x, p.y, p.z  + EPSILON)) - sceneSDF(vec3(p.x, p.y, p.z - EPSILON))
     ));
 }
 
-HitPacket Raymarch(vec3 pos, vec3 rayDir) {
+HitPacket raymarch(vec3 pos, vec3 rayDir) {
 	float depth = NEAR_DEPTH;
-
 	HitPacket hit = HitPacket(vec3(0), vec3(0), vec3(0, 0, 0), FAR_DEPTH);
+
+	vec3 cloudColorAcc = vec3(0);
+	vec3 cloudPos = vec3(-20, -10, 2);
+    float rayStepMax = 40.0;
+    float rayStep = rayStepMax / float(MAX_CLOUD_MARCHING_STEPS);
+    float rayLightStepMax = 20.0;
+    float rayLightStep = rayLightStepMax / float(MAX_CLOUD_LIGHT_MARCHING_STEPS);
+    
+    vec3 sun_direction = normalize(vec3(1.0, 0.0, 0.0));
+    float absorption = 100.0;
+    float lightTransmittance = 1.0;
+	float transmittance = 1.0;
 
 	for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
 		vec3 position = pos + rayDir * depth;
 
-		HitPacket newHit = sceneSDF(position);
-		float dist = newHit.depth;
+		float newDepth = sceneSDF(position);
+		depth += newDepth;
 
-		depth += dist;
-
-		if (dist < EPSILON) { // successful hit, grab information
+		if (newDepth < EPSILON) { // successful hit, grab information
 			vec3 normal = estimateNormal(position);
 
 			hit.position = position;
 			hit.normal = normal;
 			hit.depth = depth;
-			hit.color = newHit.color;
+			hit.cloudColor = cloudColorAcc;
 
 			break;
 		}
 		
 		if (depth >= FAR_DEPTH) { // no hit found, terminate
+			hit.cloudColor = cloudColorAcc;
 			break;
+		}
+
+		// March cloud if necessary
+		float cloudDensity = cloudSDF(position - cloudPos);
+		if (cloudDensity > 0.0) {
+		   for (int i = 0; i < MAX_CLOUD_MARCHING_STEPS; i++) {
+		   		vec3 cloud_position = position + rayDir * rayStep * i;
+
+				cloudDensity = cloudSDF(cloud_position - cloudPos);
+				if (cloudDensity < 0) break;
+
+				float tmp = cloudDensity / float(MAX_CLOUD_MARCHING_STEPS);
+				transmittance *= 1.0 - (tmp * absorption);
+				
+				if (transmittance > EPSILON) {
+				    for (int j = 0; j < MAX_CLOUD_LIGHT_MARCHING_STEPS; j++) {
+						vec3 light_position = cloud_position + sun_direction * rayLightStep * j;
+	
+				        float densityLight = cloudSDF(light_position);
+				        if (densityLight > 0.0) {
+				            lightTransmittance *= 1.0 - (densityLight / float(MAX_CLOUD_LIGHT_MARCHING_STEPS) * absorption);
+				        }
+				        
+				        if (lightTransmittance <= EPSILON) break;
+				    }
+				    
+				    // Add ambient + light scattering color
+					float opacity = 10.0;
+					float opacityl = 15.0;
+					vec3 cloudColor = vec3(1.0, 0.75, 0.79);
+					vec3 lightColor = vec3(1.0, 0.75, 0.79);
+
+				    float k = opacity * tmp * transmittance;
+				    float kl = opacityl * tmp * transmittance * lightTransmittance;
+				    cloudColorAcc += cloudColor * k + lightColor * kl;
+				}
+			}
 		}
 	}
 
@@ -229,8 +309,7 @@ float SoftShadowAaltonen(vec3 rayOrigin, vec3 rayDir, float minDist, float maxDi
     float ph = 1e10; // big, such that y = 0 on the first iteration
     
     for( int i=0; i<MAX_SHADOW_MARCHING_STEPS; i++) {
-		HitPacket hit = sceneSDF(rayOrigin + rayDir*t);
-		float h = hit.depth;
+		float h = sceneSDF(rayOrigin + rayDir*t);
 		float y = h*h/(2.0*ph);
 		float d = sqrt(h*h-y*y);
 		res = min( res, 32.0*d/max(0.0,t-y) );
@@ -251,8 +330,7 @@ float AmbientOcclusionAaltonen(vec3 position, vec3 normal) {
     for(int i=0; i<5; i++) {
         float h = 0.001 + 0.15*float(i)/4.0;
 
-		HitPacket hit = sceneSDF(position + normal * h);
-		float d = hit.depth;
+		float d = sceneSDF(position + normal * h);
         occlusion += (h-d)*sca;
         sca *= 0.95;
     }
@@ -290,6 +368,62 @@ vec3 AddLight(HitPacket hit, vec3 rayDir, vec3 lightPos, vec3 lightColor, float 
 	return lightColor * attenuation * (1.0 * diffuse * shadow + 12.0 * specular);
 }
 
+float BeersLaw(float dist, float absorption) {
+	return exp(-dist * absorption);
+}
+
+/*
+vec4 raymarchCloud(vec3 pos, vec3 rayDir) {
+    float rayStepMax = 40.0;
+    float rayStep = rayStepMax / float(MAX_CLOUD_MARCHING_STEPS);
+    float rayLightStepMax = 20.0;
+    float rayLightStep = rayLightStepMax / float(MAX_CLOUD_LIGHT_MARCHING_STEPS);
+    
+    vec3 sun_direction = normalize(vec3(1.0, 0.0, 0.0));
+    float absorption = 100.0;
+    float transmittance = 1.0;
+    float lightTransmittance = 1.0;
+	float opacity = 50.0;
+	float opacityl = 30.0;
+	vec3 cloudColor = vec3(1.0, 0.75, 0.79);
+	vec3 lightColor = vec3(1.0, 0.75, 0.79);
+    
+    vec4 color = vec4(0.0);
+    
+    for (int i = 0; i < MAX_CLOUD_MARCHING_STEPS; i++) {
+		vec3 position = pos + rayDir * rayStep * i;
+
+        float density = cloudSDF(position);
+		float tmp = density / float(MAX_CLOUD_MARCHING_STEPS);
+        
+        if (density > 0.0) {
+            transmittance *= 1.0 - (tmp * absorption);
+            
+            if (transmittance <= EPSILON) break;
+            
+            for (int j = 0; j < MAX_CLOUD_LIGHT_MARCHING_STEPS; j++)
+            {
+				vec3 light_position = position + sun_direction * rayLightStep * j;
+
+                float densityLight = cloudSDF(light_position);
+                if (densityLight > 0.0)
+                {
+                    lightTransmittance *= 1.0 - (densityLight / float(MAX_CLOUD_LIGHT_MARCHING_STEPS) * absorption);
+                }
+                
+                if (lightTransmittance <= EPSILON) break;
+            }
+            
+            // Add ambient + light scattering color
+            float k = opacity * tmp * transmittance;
+            float kl = opacityl * tmp * transmittance * lightTransmittance;
+            color += cloudColor * k + lightColor * kl;
+        }
+    }
+    
+    return color;
+}*/
+
 void main()
 {
 	vec2 uvs = inUVs;
@@ -307,27 +441,29 @@ void main()
 
 	vec3 color = vec3(0);
 
-	HitPacket hit = Raymarch(ubo.eye, rayDir);
+	HitPacket hit = raymarch(ubo.eye, rayDir);
 	if (hit.depth == FAR_DEPTH) {
 		vec3 sky_color_1 = vec3(235, 206, 255) / 255.0;
 		vec3 sky_color_2 = vec3(135, 206, 255) / 255.0;
 
-		color = mix(sky_color_1, sky_color_2, uvs.y);
+		color = mix(sky_color_1, sky_color_2, uvs.y) + hit.cloudColor;
 	} else { // shading!
-		color += AddLight(hit, rayDir, lightPos1, lightColor1, 10.0);
-		color += AddLight(hit, rayDir, lightPos2, lightColor2, 15.0);
-		color += AddLight(hit, rayDir, lightPos3, lightColor3, 20.0);
-		color += AddLight(hit, rayDir, vec3(-20, 10, 3), vec3(1, 1, 1), 20.0);
-		color += AddLight(hit, rayDir, vec3(12, 0, 3), vec3(0.2), 10.0);
+	  color += AddLight(hit, rayDir, lightPos1, lightColor1, 10.0);
+	  color += AddLight(hit, rayDir, lightPos2, lightColor2, 15.0);
+	  color += AddLight(hit, rayDir, lightPos3, lightColor3, 20.0);
+	  color += AddLight(hit, rayDir, vec3(-20, 10, 3), vec3(1, 1, 1), 20.0);
+	  color += AddLight(hit, rayDir, vec3(12, 0, 3), vec3(0.2), 10.0);
 
-		// ambient occlusion
-        float occlusion = AmbientOcclusionAaltonen(hit.position, hit.normal);
-		float ambient = clamp(0.5+0.5*hit.normal.y, 0.0, 1.0);
-        color += ambient * occlusion * vec3(0.04,0.04,0.1);
+	  // ambient occlusion
+      float occlusion = AmbientOcclusionAaltonen(hit.position, hit.normal);
+	  float ambient = clamp(0.5+0.5*hit.normal.y, 0.0, 1.0);
+      color += ambient * occlusion * vec3(0.04,0.04,0.1);
 
-		// fog
-		//color *= exp(-0.0005 * hit.depth * hit.depth * hit.depth);
 	}
+
+	color *= BeersLaw(hit.depth, 1 / 512.0);
+
+	color += hit.cloudColor;
 
 	outFragColor = vec4(color, 1.0);
 }
