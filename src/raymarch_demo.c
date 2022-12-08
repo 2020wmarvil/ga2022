@@ -94,7 +94,7 @@ raymarch_demo_t* raymarch_demo_create(heap_t* heap, fs_t* fs, wm_window_t* windo
 
 	demo->sound_index_background = audio_load_sound_from_file(demo->audio, "sounds/background.mp3");
 	audio_loop_sound(demo->audio, demo->sound_index_background, 1);
-	audio_start_sound(demo->audio, demo->sound_index_background);
+	//audio_start_sound(demo->audio, demo->sound_index_background);
 
 	return demo;
 }
@@ -170,13 +170,17 @@ static void spawn_camera(raymarch_demo_t* demo)
 	camera_component_t* camera_comp = ecs_entity_get_component(demo->ecs, demo->camera_ent, demo->camera_type, true);
 	mat4f_make_perspective(&camera_comp->projection, (float)M_PI / 2.0f, 16.0f / 9.0f, 0.1f, 100.0f);
 
-	camera_comp->eye_pos = vec3f_scale(vec3f_forward(), -5.0f);
-	camera_comp->forward = vec3f_forward();
+	camera_comp->eye_pos = vec3f_zero(); //vec3f_scale(vec3f_forward(), -5.0f);
+	camera_comp->forward = vec3f_scale(vec3f_forward(), -1);
 	camera_comp->up = vec3f_up();
-	mat4f_make_lookat(&camera_comp->view, &camera_comp->eye_pos, &camera_comp->forward, &camera_comp->up);
+	//mat4f_make_lookat(&camera_comp->view, &camera_comp->eye_pos, &camera_comp->forward, &camera_comp->up);
 
+	vec3f_t temp_eye = { 1, 0, 0 };
+	vec3f_t temp_forward = { -1, 0, 0 };
+	mat4f_make_lookat(&camera_comp->view, &temp_eye, &temp_forward, &camera_comp->up);
+
+	camera_comp->pitch = 0.0f;
 	camera_comp->yaw = 0.0f;
-	camera_comp->pitch = 180.0f;
 }
 
 static void spawn_screen_quad(raymarch_demo_t* demo)
@@ -203,15 +207,15 @@ static void update_camera(raymarch_demo_t* demo)
 	wm_get_mouse_move(demo->window, &mouse_x, &mouse_y);
 
 	camera_component_t* camera_comp = ecs_entity_get_component(demo->ecs, demo->camera_ent, demo->camera_type, true);
-	
+
 	// Adapted from the learnopengl.com camera script
 	float xoffset = mouse_x * MOUSE_SENSITIVITY;
 	float yoffset = mouse_y * MOUSE_SENSITIVITY;
 
-    camera_comp->pitch -= xoffset;
-    camera_comp->yaw -= yoffset;
+	camera_comp->pitch += xoffset;
+	camera_comp->yaw -= yoffset;
 
-    // make sure that when pitch is out of bounds, screen doesn't get flipped
+	// make sure that when pitch is out of bounds, screen doesn't get flipped
 	if (camera_comp->yaw > 89.0f)
 	{
 		camera_comp->yaw = 89.0f;
@@ -221,13 +225,27 @@ static void update_camera(raymarch_demo_t* demo)
 		camera_comp->yaw = -89.0f;
 	}
 
-    vec3f_t forward;
-    forward.x = (float)(cos(degrees_to_radians(camera_comp->yaw)) * cos(degrees_to_radians(camera_comp->pitch)));
-    forward.y = (float)(sin(degrees_to_radians(camera_comp->pitch)));
-    forward.z = (float)(sin(degrees_to_radians(camera_comp->yaw)) * cos(degrees_to_radians(camera_comp->pitch)));
+	float pRad = degrees_to_radians(camera_comp->pitch);
+	float yRad = degrees_to_radians(camera_comp->yaw);
+
+	vec3f_t forward;
+	forward.x = (float)(cos(pRad) * cos(yRad));
+	forward.y = (float)(sin(pRad) * cos(yRad));
+	forward.z = (float)(sin(yRad));
     camera_comp->forward = vec3f_norm(forward);
 
-	mat4f_make_lookat(&camera_comp->view, &camera_comp->eye_pos, &camera_comp->forward, &camera_comp->up);
+	//mat4f_make_lookat(&camera_comp->view, &camera_comp->eye, &camera_comp->forward, &camera_comp->up);
+
+	debug_print(k_print_warning, "p/y (%f, %f)\neye (%f, %f, %f\nforward (%f, %f, %f)\n\n",
+		camera_comp->pitch,
+		camera_comp->yaw,
+		camera_comp->eye_pos.x,
+		camera_comp->eye_pos.y,
+		camera_comp->eye_pos.z,
+		camera_comp->forward.x,
+		camera_comp->forward.y,
+		camera_comp->forward.z
+	);
 
 	vec3f_t right = vec3f_norm(vec3f_cross(camera_comp->forward, camera_comp->up));
 	vec3f_t up = vec3f_norm(vec3f_cross(camera_comp->forward, right));
@@ -242,19 +260,19 @@ static void update_camera(raymarch_demo_t* demo)
 	}
 	if (key_mask & (k_key_left | k_key_a))
 	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(right, dt * -CAMERA_SPEED));
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(right, dt * CAMERA_SPEED));
 	}
 	if (key_mask & (k_key_right | k_key_d))
 	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(right, dt * CAMERA_SPEED));
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(right, dt * -CAMERA_SPEED));
 	}
 	if (key_mask & k_key_q)
 	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(up, dt * -CAMERA_SPEED));
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(up, dt * CAMERA_SPEED));
 	}
 	if (key_mask & k_key_e)
 	{
-		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(up, dt * CAMERA_SPEED));
+		camera_comp->eye_pos = vec3f_add(camera_comp->eye_pos, vec3f_scale(up, dt * -CAMERA_SPEED));
 	}
 }
 
@@ -269,10 +287,17 @@ static void draw_models(raymarch_demo_t* demo)
 		mat4f_t projection;
 		mat4f_t model;
 		mat4f_t view;
+		vec3f_t view_dir;
+		float a; // I think we need this helper value because vk doesn't support vec3 uniforms
+		vec3f_t eye;
 	} uniform_data;
 	uniform_data.projection = camera_comp->projection;
 	uniform_data.view = camera_comp->view;
 	transform_to_matrix(&model_trans_comp->transform, &uniform_data.model);
+
+	uniform_data.eye = camera_comp->eye_pos;
+	uniform_data.view_dir = camera_comp->forward;
+	uniform_data.a = camera_comp->eye_pos.x;
 	gpu_uniform_buffer_info_t uniform_info = { .data = &uniform_data, sizeof(uniform_data) };
 	
 	render_push_model(demo->render, &demo->screen_quad_ent, model_comp->mesh_info, model_comp->shader_info, &uniform_info);

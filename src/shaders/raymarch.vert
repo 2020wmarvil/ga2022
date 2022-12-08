@@ -8,6 +8,8 @@ layout (binding = 0) uniform UBO
 	mat4 projectionMatrix;
 	mat4 modelMatrix;
 	mat4 viewMatrix;
+	vec3 forward;
+	vec3 eye;
 } ubo;
 
 layout (location = 0) out vec2 outUVs;
