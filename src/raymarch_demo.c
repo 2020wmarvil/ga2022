@@ -132,10 +132,10 @@ static void load_resources(raymarch_demo_t* demo)
 
 	static vec3f_t quad_verts[] =
 	{
-		{ 0.0f, -1.0f,  1.0f }, { 0.0f, 0.0f },
-		{ 0.0f,  1.0f,  1.0f }, { 1.0f, 0.0f },
-		{ 0.0f, -1.0f, -1.0f }, { 0.0f, 1.0f },
-		{ 0.0f,  1.0f, -1.0f }, { 1.0f, 1.0f },
+		{ 0.0f, -1.78f,  1.0f }, { 0.0f, 0.0f },
+		{ 0.0f,  1.78f,  1.0f }, { 1.0f, 0.0f },
+		{ 0.0f, -1.78f, -1.0f }, { 0.0f, 1.0f },
+		{ 0.0f,  1.78f, -1.0f }, { 1.0f, 1.0f },
 	};
 
 	static uint16_t quad_indices[] =
@@ -290,6 +290,7 @@ static void draw_models(raymarch_demo_t* demo)
 		vec3f_t view_dir;
 		float a; // I think we need this helper value because vk doesn't support vec3 uniforms
 		vec3f_t eye;
+		float time;
 	} uniform_data;
 	uniform_data.projection = camera_comp->projection;
 	uniform_data.view = camera_comp->view;
@@ -298,6 +299,7 @@ static void draw_models(raymarch_demo_t* demo)
 	uniform_data.eye = camera_comp->eye_pos;
 	uniform_data.view_dir = camera_comp->forward;
 	uniform_data.a = camera_comp->eye_pos.x;
+	uniform_data.time = (float)timer_object_get_ms(demo->timer);
 	gpu_uniform_buffer_info_t uniform_info = { .data = &uniform_data, sizeof(uniform_data) };
 	
 	render_push_model(demo->render, &demo->screen_quad_ent, model_comp->mesh_info, model_comp->shader_info, &uniform_info);
